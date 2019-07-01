@@ -9,7 +9,7 @@ Created on Fri Feb 22 16:08:50 2019
 #%%
 import os
 #os.chdir('/Users/krisjan/repos/msft_malware/') #mac
-os.chdir('/home/krisjan/repos/nb_pl/') #linux
+os.chdir('/home/krisjan/repos/nb/nb_pl/') #linux
 #os.chdir('/home/lnr-ai/krisjan/santander')
 #%%
 import pandas as pd
