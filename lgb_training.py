@@ -22,6 +22,9 @@ le_prev_e_grp = LabelEncoder()
 df['PREV_E_GROUP_enc'] = le_prev_e_grp.fit_transform(df['PREV_E_GROUP'])
 le_R_ACC_SUPP_GRD = LabelEncoder()
 df['R_ACC_SUPP_GRD_enc'] = le_R_ACC_SUPP_GRD.fit_transform(df['R_ACC_SUPP_GRD'])
+df_xgb_enc = pd.concat([pd.read_csv('data/20190701_xgb_encode.csv',index_col=0),
+                        pd.read_csv('data/20190701_xgb_encode_test.csv',index_col=0)])
+df = df.merge(df_xgb_enc, left_index=True,right_index=True)
 #%%
 df_train = df.loc[df.VALIDATION == 0].copy()
 
@@ -145,7 +148,7 @@ upper_bounds = [.5, 100, 511, 2047, 20, 1, 1, 100, 5, 120, 5,50]
 
 #%%
 pop_size = 50
-generations = 10
+generations = 5
 #%% Genetic Search for Parameters
 
 best_gen_params, best_gen_scores = gen.evolve(list_of_types, lower_bounds, upper_bounds, 
@@ -160,21 +163,14 @@ best_gen_params, best_gen_scores = gen.evolve(list_of_types, lower_bounds, upper
 #  13.59002239949685, 4.3293546609116405, 65.0, 3.4143119743501202, 9.0]
 # n_trees = 724
 # test auc: 0.8166
-
-lr, spw, mb, nl, mcw, ss, csbt, alpha, mgts, mdil, rl, bfreq = [0.018534055158779598,
-                                                                9.513380418536581,
-                                                                414.0,
-                                                                417.6600000000001,
-                                                                19.0,
-                                                                0.4269142120003584,
-                                                                0.7862978350438524,
-                                                                10.949163100217227,
-                                                                2.839248368346823,
-                                                                7.0,
-                                                                0.8184855809672315,
-                                                                0.0]
-n_trees = 541
+#-----
+#[0.018534055158779598,9.513380418536581,414.0,  417.6600000000001,19.0,0.4269142120003584,
+# 0.7862978350438524,10.949163100217227,2.839248368346823,7.0,0.8184855809672315,0.0]
+# n_trees = 542
 # test auc: 0.8126
+lr, spw, mb, nl, mcw, ss, csbt, alpha, mgts, mdil, rl, bfreq = [0.011878857605065265, 10.851273008316747, 287.0, 739.0, 3.0, 0.9494528058727572, 0.9679354320100699, 3.944885445823133, 0.5841200149641762, 7.4, 2.4248606975818556, 15.0]
+n_trees = 1515
+# 0.8084017756623665 encoding of test is not correct
 #%% final training
 
 y_train = df_train.DEFAULT_FLAG
@@ -204,7 +200,7 @@ lgb_param = {'boosting_type': 'gbdt',
 lgbtrain = lgb.Dataset(data = X_train.values, label = y_train.values)                         
 estimator = lgb.train(lgb_param, lgbtrain, num_boost_round=n_trees) 
 #%%
-estimator.save_model('data/20190626_lgb.model')
+estimator.save_model('data/20190702_lgb.model')
 #%%
 from sklearn.metrics import roc_auc_score
 #%%

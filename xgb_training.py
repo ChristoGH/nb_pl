@@ -128,16 +128,17 @@ best_gen_params, best_gen_scores = gen.evolve(list_of_types, lower_bounds, upper
 # train-auc-mean  train-auc-std  test-auc-mean  test-auc-std
 #     0.929277        0.00034       0.892569      0.002264
 
-md,mcw,gam,ss,csbt,spw,lr,ra,rl = [2, 16, 5.824753838204659, 0.7863037966394404, 
-                                   0.5549698410581101, 5.332480165275143, 0.3316496007509376, 
-                                   34.82269238874623, 3.66051193238583]
+md,mcw,gam,ss,csbt,spw,lr,ra,rl = [14, 11, 6.8342199163679185, 
+                                   0.8727750176675034, 0.7529301777140894, 
+                                   2.631888335731908, 0.023885505870438296, 
+                                   15.028479399260862, 1.3564860482160008]
 
-n_trees = 645
+n_trees = 324
 #%%
 xgb_x_val_auc([md,mcw,gam,ss,csbt,spw,lr,ra,rl])
 #%% final training
 
-y_train = df_train.target
+y_train = df_train.DEFAULT_FLAG
 X_train = df_train[col_filter]
                      
 xgb_param = {'base_score': 0.5,
@@ -162,8 +163,8 @@ xgb_param = {'base_score': 0.5,
 
 xgtrain = xgb.DMatrix(X_train.values, label=y_train.values, silent=True)                         
 estimator = xgb.train( xgb_param, xgtrain, verbose_eval=True)
-
-estimator.save_model('data/20190310_xgb.model')
+#%%
+estimator.save_model('data/20190701_xgb.model')
 
 #%%
 from sklearn.model_selection import KFold
@@ -194,15 +195,19 @@ for train_index, test_index in kf.split(df_train):
     trainloc = df_train.iloc[train_index,:].index
     testloc = df_train.iloc[test_index,:].index
     xgtrain = xgb.DMatrix(df_train.loc[trainloc,col_filter].values, 
-                           df_train.loc[trainloc,'target'].values) 
+                           df_train.loc[trainloc,'DEFAULT_FLAG'].values) 
     estimator = xgb.train( xgb_param, xgtrain, verbose_eval=True)
     df_train.loc[testloc,'xgb_enc'] = estimator.predict(xgb.DMatrix(df_train.loc[testloc,col_filter].values))
 
-pd.DataFrame(df_train.xgb_enc).to_csv('data/xgb_encode.csv')
+pd.DataFrame(df_train.xgb_enc).to_csv('data/20190701_xgb_encode.csv')
 
 #%%
-df_test = pd.read_csv('data/test.csv')
-df_test = df_test.set_index('ID_code')
-df_test['target'] = estimator.predict(xgb.DMatrix(df_test.values))
+from sklearn.metrics import roc_auc_score
 #%%
-pd.DataFrame(df_test.target).to_csv('data/20190310_xgb_model.csv')
+df_test = df.loc[df.VALIDATION == 1].copy()
+X_test = df_test[col_filter]
+y_test = df_test.DEFAULT_FLAG
+
+df_test['xgb_enc'] = estimator.predict(xgb.DMatrix(X_test.values))
+pd.DataFrame(df_test.xgb_enc).to_csv('data/20190701_xgb_encode_test.csv')
+roc_auc_score(y_test, df_test.xgb_enc.values)
