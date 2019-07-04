@@ -17,14 +17,23 @@ from pandas import datetime as dt
 from sklearn.preprocessing import LabelEncoder
 #%%
 df= pd.read_hdf('data/pl_model.h5',key='df')
-df = df.set_index('ID')
+df.sort_values(['ID','WEIGHTING'],inplace=True)
+df.index = range(len(df))
 le_prev_e_grp = LabelEncoder()
 df['PREV_E_GROUP_enc'] = le_prev_e_grp.fit_transform(df['PREV_E_GROUP'])
 le_R_ACC_SUPP_GRD = LabelEncoder()
 df['R_ACC_SUPP_GRD_enc'] = le_R_ACC_SUPP_GRD.fit_transform(df['R_ACC_SUPP_GRD'])
-df_xgb_enc = pd.concat([pd.read_csv('data/20190701_xgb_encode.csv',index_col=0),
-                        pd.read_csv('data/20190701_xgb_encode_test.csv',index_col=0)])
-df = df.merge(df_xgb_enc, left_index=True,right_index=True)
+#df_xgb_enc = pd.concat([pd.read_csv('data/20190701_xgb_encode.csv',index_col=0),
+#                        pd.read_csv('data/20190701_xgb_encode_test.csv',index_col=0)])
+#df = df.merge(df_xgb_enc, left_index=True,right_index=True)
+df_logit_enc = pd.concat([pd.read_csv('data/20190703_1_logit_encode.csv'),
+                        pd.read_csv('data/20190703_1_logit_encode_test.csv'),
+                        pd.read_csv('data/20190703_1_logit_encode_val.csv')])
+df_logit_enc.sort_values(['ID','WEIGHTING'],inplace=True)
+df_logit_enc.index = range(len(df_logit_enc))
+df_logit_enc.drop(['ID','WEIGHTING'],axis=1,inplace=True)
+df = df.merge(df_logit_enc, left_index=True,right_index=True)
+df = df.set_index(['ID','WEIGHTING'])
 #%%
 df_train = df.loc[df.VALIDATION == 0].copy()
 
@@ -105,7 +114,8 @@ def lgb_x_val_auc(param_list):
                      'missing': None,
                      'verbose':-1}
 
-    lgbtrain = lgb.Dataset(data = X_train.values, label = y_train.values)
+    lgbtrain = lgb.Dataset(data = X_train.values, label = y_train.values, 
+                           weight=X_train.index.to_frame().WEIGHTING.values)
     cvresult = lgb.cv(lgb_param, lgbtrain, nfold=cv_folds, num_boost_round= max_trees,
             metrics='auc', early_stopping_rounds=50, verbose_eval=False,seed=myseed)
     cvresult = pd.DataFrame.from_dict(cvresult, orient='columns', dtype=None)
@@ -158,19 +168,14 @@ best_gen_params, best_gen_scores = gen.evolve(list_of_types, lower_bounds, upper
                                           )#,old_scores=first_guess_scores, save_gens=True)
 
 #%% results
-# first run
-# [0.013156492593887134, 5.174045074918895, 306.0, 1899.0, 12.0, 0.9638178867024068, 0.7554975891702108, 
-#  13.59002239949685, 4.3293546609116405, 65.0, 3.4143119743501202, 9.0]
-# n_trees = 724
-# test auc: 0.8166
-#-----
-#[0.018534055158779598,9.513380418536581,414.0,  417.6600000000001,19.0,0.4269142120003584,
-# 0.7862978350438524,10.949163100217227,2.839248368346823,7.0,0.8184855809672315,0.0]
-# n_trees = 542
-# test auc: 0.8126
-lr, spw, mb, nl, mcw, ss, csbt, alpha, mgts, mdil, rl, bfreq = [0.011878857605065265, 10.851273008316747, 287.0, 739.0, 3.0, 0.9494528058727572, 0.9679354320100699, 3.944885445823133, 0.5841200149641762, 7.4, 2.4248606975818556, 15.0]
-n_trees = 1515
-# 0.8084017756623665 encoding of test is not correct
+
+lr, spw, mb, nl, mcw, ss, csbt, alpha, mgts, mdil, rl, bfreq = [0.03158777058334927, 8.122764861490227, 
+                                                                234.10000000000002, 1728.0, 4.0, 0.6206427525949737, 
+                                                                0.2029155785000626, 85.23343922392479, 
+                                                                1.9247247593841244, 112.0, 2.9671149166649555, 15.0]
+n_trees = 900
+# 0.7654286197620603
+# 0.780029660220571 on test
 #%% final training
 
 y_train = df_train.DEFAULT_FLAG
@@ -197,22 +202,26 @@ lgb_param = {'boosting_type': 'gbdt',
              'missing': None,
              'verbose':1}
 
-lgbtrain = lgb.Dataset(data = X_train.values, label = y_train.values)                         
+lgbtrain = lgb.Dataset(data = X_train.values, label = y_train.values,
+                       weight=X_train.index.to_frame().WEIGHTING.values)                         
 estimator = lgb.train(lgb_param, lgbtrain, num_boost_round=n_trees) 
 #%%
-estimator.save_model('data/20190702_lgb.model')
+estimator.save_model('data/20190703_1_lgb_logit_stack.model')
 #%%
 from sklearn.metrics import roc_auc_score
+from sklearn.preprocessing import MinMaxScaler
 #%%
 df_test = df.loc[df.VALIDATION == 1].copy()
 X_test = df_test[col_filter]
 y_test = df_test.DEFAULT_FLAG
-y_predicted = estimator.predict(X_test)
-roc_auc_score(y_test, y_predicted)
+y_predicted = pd.DataFrame(estimator.predict(X_test),index=X_test.index,columns=['lgb_pred'])
+
+roc_auc_score(y_test.sort_index(), y_predicted,sample_weight=X_test.index.to_frame().WEIGHTING)
+y_predicted.to_csv('data/20190703_lgb_logit_stack_model_test.csv')
 #%%
 df_pred = df.loc[df.VALIDATION == 2].copy()
 X_pred = df_pred[col_filter]
 df_pred['prediction_score'] = estimator.predict(X_pred)
 
 #%%
-pd.DataFrame(df_pred['prediction_score']).to_csv('data/20190626_lgb_model.csv')
+pd.DataFrame(df_pred['prediction_score']).to_csv('data/20190703_lgb_logit_stack_model_val.csv')
