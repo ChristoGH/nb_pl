@@ -23,9 +23,15 @@ le_prev_e_grp = LabelEncoder()
 df['PREV_E_GROUP_enc'] = le_prev_e_grp.fit_transform(df['PREV_E_GROUP'])
 le_R_ACC_SUPP_GRD = LabelEncoder()
 df['R_ACC_SUPP_GRD_enc'] = le_R_ACC_SUPP_GRD.fit_transform(df['R_ACC_SUPP_GRD'])
-#df_xgb_enc = pd.concat([pd.read_csv('data/20190701_xgb_encode.csv',index_col=0),
-#                        pd.read_csv('data/20190701_xgb_encode_test.csv',index_col=0)])
-#df = df.merge(df_xgb_enc, left_index=True,right_index=True)
+
+df_sgd_enc = pd.concat([pd.read_csv('data/20190704_sgd_encode_train.csv'),
+                        pd.read_csv('data/20190704_sgd_encode_test.csv').rename(columns={'svm_enc':'sgd_enc'}),
+                        pd.read_csv('data/20190704_sgd_encode_val.csv').rename(columns={'svm_enc':'sgd_enc'})])
+df_sgd_enc.sort_values(['ID','WEIGHTING'],inplace=True)
+df_sgd_enc.index = range(len(df_sgd_enc))
+df_sgd_enc.drop(['ID','WEIGHTING'],axis=1,inplace=True)
+df = df.merge(df_sgd_enc, left_index=True,right_index=True)
+
 df_logit_enc = pd.concat([pd.read_csv('data/20190703_1_logit_encode.csv'),
                         pd.read_csv('data/20190703_1_logit_encode_test.csv'),
                         pd.read_csv('data/20190703_1_logit_encode_val.csv')])
@@ -33,6 +39,7 @@ df_logit_enc.sort_values(['ID','WEIGHTING'],inplace=True)
 df_logit_enc.index = range(len(df_logit_enc))
 df_logit_enc.drop(['ID','WEIGHTING'],axis=1,inplace=True)
 df = df.merge(df_logit_enc, left_index=True,right_index=True)
+
 df = df.set_index(['ID','WEIGHTING'])
 #%%
 df_train = df.loc[df.VALIDATION == 0].copy()
@@ -169,13 +176,17 @@ best_gen_params, best_gen_scores = gen.evolve(list_of_types, lower_bounds, upper
 
 #%% results
 
-lr, spw, mb, nl, mcw, ss, csbt, alpha, mgts, mdil, rl, bfreq = [0.03158777058334927, 8.122764861490227, 
-                                                                234.10000000000002, 1728.0, 4.0, 0.6206427525949737, 
-                                                                0.2029155785000626, 85.23343922392479, 
-                                                                1.9247247593841244, 112.0, 2.9671149166649555, 15.0]
-n_trees = 900
-# 0.7654286197620603
-# 0.780029660220571 on test
+lr, spw, mb, nl, mcw, ss, csbt, alpha, mgts, mdil, rl, bfreq = [0.005211914716464551, 
+                                                                11.361502350421855, 
+                                                                126.0, 599.0, 3.6, 
+                                                                0.9958838042643324, 
+                                                                0.17736474556883752, 
+                                                                71.29010978089583, 
+                                                                1.4253313277376938, 
+                                                                50.0, 2.7400436617955988, 19.0]
+n_trees = 3390
+# 0.7654321225396418
+# 0.7806680080427659 on test
 #%% final training
 
 y_train = df_train.DEFAULT_FLAG
@@ -206,7 +217,7 @@ lgbtrain = lgb.Dataset(data = X_train.values, label = y_train.values,
                        weight=X_train.index.to_frame().WEIGHTING.values)                         
 estimator = lgb.train(lgb_param, lgbtrain, num_boost_round=n_trees) 
 #%%
-estimator.save_model('data/20190703_1_lgb_logit_stack.model')
+estimator.save_model('data/20190704_lgb_stacked.model')
 #%%
 from sklearn.metrics import roc_auc_score
 from sklearn.preprocessing import MinMaxScaler
@@ -216,7 +227,7 @@ X_test = df_test[col_filter]
 y_test = df_test.DEFAULT_FLAG
 y_predicted = pd.DataFrame(estimator.predict(X_test),index=X_test.index,columns=['lgb_pred'])
 
-roc_auc_score(y_test.sort_index(), y_predicted,sample_weight=X_test.index.to_frame().WEIGHTING)
+roc_auc_score(y_test, y_predicted,sample_weight=X_test.index.to_frame().WEIGHTING)
 y_predicted.to_csv('data/20190703_lgb_logit_stack_model_test.csv')
 #%%
 df_pred = df.loc[df.VALIDATION == 2].copy()
