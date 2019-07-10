@@ -22,6 +22,7 @@ le_prev_e_grp = LabelEncoder()
 df['PREV_E_GROUP_enc'] = le_prev_e_grp.fit_transform(df['PREV_E_GROUP'])
 le_R_ACC_SUPP_GRD = LabelEncoder()
 df['R_ACC_SUPP_GRD_enc'] = le_R_ACC_SUPP_GRD.fit_transform(df['R_ACC_SUPP_GRD'])
+#%% add logit
 df_logit_enc = pd.concat([pd.read_csv('data/20190703_1_logit_encode.csv'),
                         pd.read_csv('data/20190703_1_logit_encode_test.csv'),
                         pd.read_csv('data/20190703_1_logit_encode_val.csv')])
@@ -29,25 +30,36 @@ df_logit_enc.sort_values(['ID','WEIGHTING'],inplace=True)
 df_logit_enc.index = range(len(df_logit_enc))
 df_logit_enc.drop(['ID','WEIGHTING'],axis=1,inplace=True)
 df = df.merge(df_logit_enc, left_index=True,right_index=True)
-df = df.set_index(['ID','WEIGHTING'])
+#%% add sgd
+df_sgd_enc = pd.concat([pd.read_csv('data/20190704_sgd_encode_train.csv'),
+                        pd.read_csv('data/20190704_sgd_encode_test.csv').rename(columns={'svm_enc':'sgd_enc'}),
+                        pd.read_csv('data/20190704_sgd_encode_val.csv').rename(columns={'svm_enc':'sgd_enc'})])
+df_sgd_enc.sort_values(['ID','WEIGHTING'],inplace=True)
+df_sgd_enc.index = range(len(df_sgd_enc))
+df_sgd_enc.drop(['ID','WEIGHTING'],axis=1,inplace=True)
+df = df.merge(df_sgd_enc, left_index=True,right_index=True)
+#%% set index
+#df = df.set_index(['ID','WEIGHTING'])
+df.sort_values(['VALIDATION','ID','WEIGHTING'], inplace=True)
+df.index = range(len(df))
 #%%
+#df_train = df.loc[df.VALIDATION.isin([0,1])].copy()
 df_train = df.loc[df.VALIDATION == 0].copy()
 #%%
 import xgboost as xgb
 #import pbar
 #%%
 #%% get train_df from dataprep for final train
-col_filter = list(df_train.drop(['VALIDATION', 'DEFAULT_FLAG', 'PREV_E_GROUP', 'R_ACC_SUPP_GRD'],axis=1).columns)#+list_discarded
+col_filter = list(df_train.drop(['ID','WEIGHTING','VALIDATION', 'DEFAULT_FLAG', 'PREV_E_GROUP', 'R_ACC_SUPP_GRD'],axis=1).columns)#+list_discarded
+weights = df_train.WEIGHTING
 X_train = df_train[col_filter]
 y_train = df_train.DEFAULT_FLAG
 #%%
-myseed = 0
+myseed = 888
 cv_folds = 5
-ttu = 12
+ttu = 14
 
-max_trees = 5000
-#%%
-#%% objective function
+max_trees = 2000
 #%% objective function
 date = str(pd.datetime.now().year) + str(pd.datetime.now().month)+str(pd.datetime.now().day)
 
@@ -83,7 +95,7 @@ def xgb_x_val_auc(param_list):
                          'subsample': ss,
                          'silent':1}
 
-    xgtrain = xgb.DMatrix(X_train.values, label=y_train.values, weight=X_train.index.to_frame().WEIGHTING.values)
+    xgtrain = xgb.DMatrix(X_train.values, label=y_train.values, weight=weights.values)
     cvresult = xgb.cv(xgb_param, xgtrain, nfold=cv_folds, num_boost_round= max_trees,
             metrics='auc', early_stopping_rounds=50, seed=myseed)
     cur_res = cvresult.tail(1).values[0][2]
@@ -114,7 +126,7 @@ first_guess = pd.DataFrame([[md,mcw,gam,ss,csbt,spw,lr,ra,rl]])
 list_of_types = ['int', 'int', 'float', 'float','float', 'float', 'float', 'float', 'float']
 
 lower_bounds = [1,1,0,.4,.4,1,.001,0,1]
-upper_bounds = [20,20,10,1,1,10,.5,100,10]
+upper_bounds = [25,25,20,1,1,30,.5,100,10]
 pop_size = 50
 generations = 5
 
@@ -132,8 +144,8 @@ md,mcw,gam,ss,csbt,spw,lr,ra,rl = [5, 1, 0.0, 0.8, 0.407583809701451,
                                    2.023344245301038, 0.012291901733646476, 
                                    14.449175235085729, 9.311629606262882]
 
-n_trees = 1650
-# 0.7666 cross val
+n_trees = 1723
+# 0.766835 cross val
 # 0.7809610579546018 test
 #%%
 xgb_x_val_auc([md,mcw,gam,ss,csbt,spw,lr,ra,rl])
@@ -152,6 +164,7 @@ xgb_param = {'base_score': 0.5,
                          'max_depth': md,
                          'min_child_weight': mcw,
                          'missing': None,
+                         'tree_method':'hist',
 #                         'n_estimators': n_trees,
                          'n_jobs': ttu,
                          'objective': 'binary:logistic',
@@ -162,10 +175,10 @@ xgb_param = {'base_score': 0.5,
                          'subsample': ss,
                          'silent':1}
 
-xgtrain = xgb.DMatrix(X_train.values, label=y_train.values, silent=True, weight=X_train.index.to_frame().WEIGHTING.values)                         
+xgtrain = xgb.DMatrix(X_train.values, label=y_train.values, silent=True, weight=weights.values)                         
 estimator = xgb.train( xgb_param, xgtrain, verbose_eval=True, num_boost_round=n_trees)
 #%%
-estimator.save_model('data/20190704_xgb_logit_stack.model')
+estimator.save_model('data/20190710_xgb_stack.model')
 
 #%%
 from sklearn.model_selection import KFold
@@ -209,17 +222,49 @@ from sklearn.metrics import roc_auc_score
 df_test = df.loc[df.VALIDATION == 1].copy()
 X_test = df_test[col_filter]
 y_test = df_test.DEFAULT_FLAG
+test_weights = df_test.WEIGHTING
 
 df_test['xgb_enc'] = estimator.predict(xgb.DMatrix(X_test.values))
-roc_auc_score(y_test, df_test.xgb_enc.values, sample_weight=X_test.index.to_frame().WEIGHTING.values)
-# 0.8251559597994405
+roc_auc_score(y_test, df_test.xgb_enc.values, sample_weight=test_weights.values)
+# 0.7808496536979506
 
-pd.DataFrame(df_test.xgb_enc).to_csv('data/20190704_xgb_logit_stack_test.csv')
+pd.DataFrame(df_test.xgb_enc).to_csv('data/20190710_xgb_stack_test.csv')
 #%%
+df_train = df.loc[df.VALIDATION.isin([0,1])].copy()
+weights = df_train.WEIGHTING
+X_train = df_train[col_filter]
+y_train = df_train.DEFAULT_FLAG
+
+xgb_param = {'base_score': 0.5,
+                         'booster': 'gbtree',
+                         'colsample_bylevel': 1,
+                         'colsample_bytree': csbt,
+                         'gamma': gam,
+                         'learning_rate': lr,
+                         'max_delta_step': 0,
+                         'max_depth': md,
+                         'min_child_weight': mcw,
+                         'missing': None,
+                         'tree_method':'hist',
+#                         'n_estimators': n_trees,
+                         'n_jobs': ttu,
+                         'objective': 'binary:logistic',
+                         'reg_alpha': ra,
+                         'reg_lambda': rl,
+                         'scale_pos_weight': spw,
+                         'random_state': myseed,
+                         'subsample': ss,
+                         'silent':1}
+
+xgtrain = xgb.DMatrix(X_train.values, label=y_train.values, silent=True, weight=weights.values)                         
+estimator = xgb.train( xgb_param, xgtrain, verbose_eval=True, num_boost_round=n_trees)
+#%%
+estimator.save_model('data/20190710_xgb_stack_full.model')
+
 #%%
 df_val = df.loc[df.VALIDATION == 2].copy()
 X_val = df_val[col_filter]
 
 df_val['xgb_enc'] = estimator.predict(xgb.DMatrix(X_val.values))
 
-pd.DataFrame(df_val.xgb_enc).to_csv('data/20190704_xgb_logit_stack_val.csv')
+pd.DataFrame(df_val.xgb_enc).to_csv('data/20190710_xgb_stack_val.csv')

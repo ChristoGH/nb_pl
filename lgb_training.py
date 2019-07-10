@@ -42,7 +42,7 @@ df = df.merge(df_logit_enc, left_index=True,right_index=True)
 
 df = df.set_index(['ID','WEIGHTING'])
 #%%
-df_train = df.loc[df.VALIDATION == 0].copy()
+df_train = df.loc[df.VALIDATION.isin([0,1])].copy()
 
 #%% check distributions between train and test
 #%% this is to check the match between feature distributions in test and train
@@ -187,6 +187,9 @@ lr, spw, mb, nl, mcw, ss, csbt, alpha, mgts, mdil, rl, bfreq = [0.00521191471646
 n_trees = 3390
 # 0.7654321225396418
 # 0.7806680080427659 on test
+#train+test xval
+lr, spw, mb, nl, mcw, ss, csbt, alpha, mgts, mdil, rl, bfreq = [0.001901909802560959, 5.642797327735218, 87.0, 41.0, 3.0, 0.8170695686467944, 0.31682810544463536, 23.868937110776013, 1.5089278692144659, 31.0, 3.7938232179178444, 20.400000000000002]
+n_trees = 8055
 #%% final training
 
 y_train = df_train.DEFAULT_FLAG
@@ -217,7 +220,7 @@ lgbtrain = lgb.Dataset(data = X_train.values, label = y_train.values,
                        weight=X_train.index.to_frame().WEIGHTING.values)                         
 estimator = lgb.train(lgb_param, lgbtrain, num_boost_round=n_trees) 
 #%%
-estimator.save_model('data/20190704_lgb_stacked.model')
+estimator.save_model('data/20190709_lgb_stacked.model')
 #%%
 from sklearn.metrics import roc_auc_score
 from sklearn.preprocessing import MinMaxScaler
@@ -235,4 +238,4 @@ X_pred = df_pred[col_filter]
 df_pred['prediction_score'] = estimator.predict(X_pred)
 
 #%%
-pd.DataFrame(df_pred['prediction_score']).to_csv('data/20190703_lgb_logit_stack_model_val.csv')
+pd.DataFrame(df_pred['prediction_score']).to_csv('data/20190709_lgb_stack_model_val.csv')
