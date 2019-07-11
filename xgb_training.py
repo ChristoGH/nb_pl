@@ -38,6 +38,17 @@ df_sgd_enc.sort_values(['ID','WEIGHTING'],inplace=True)
 df_sgd_enc.index = range(len(df_sgd_enc))
 df_sgd_enc.drop(['ID','WEIGHTING'],axis=1,inplace=True)
 df = df.merge(df_sgd_enc, left_index=True,right_index=True)
+#%% add dl
+df_dl_enc = pd.concat([pd.read_csv('data/201710_dl_encode_train.csv'),
+                        pd.read_csv('data/201710_dl_encode_test.csv'),
+                        pd.read_csv('data/201710_dl_encode_val.csv')])
+df_dl_enc.sort_values(['ID','WEIGHTING'],inplace=True)
+df_dl_enc.index = range(len(df_dl_enc))
+df_dl_enc.drop(['ID','WEIGHTING'],axis=1,inplace=True)
+df = df.merge(df_dl_enc, left_index=True,right_index=True)
+#%%
+df_dnn = pd.read_csv('data/DNN_test_20190710.csv')
+
 #%% set index
 #df = df.set_index(['ID','WEIGHTING'])
 df.sort_values(['VALIDATION','ID','WEIGHTING'], inplace=True)

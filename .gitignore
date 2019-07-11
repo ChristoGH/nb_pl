@@ -62,3 +62,5 @@ target/
 *.csv
 
 *.model
+
+data/DNN_test_20190710\.zip
