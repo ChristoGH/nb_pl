@@ -9,7 +9,8 @@ Created on Fri Feb 22 16:08:50 2019
 #%%
 import os
 #os.chdir('/Users/krisjan/repos/msft_malware/') #mac
-os.chdir('/home/krisjan/repos/nb/nb_pl/') #linux
+#os.chdir('/home/krisjan/repos/nb/nb_pl/') #linux
+os.chdir('/home/lnr-ai/krisjan/nb_pl')
 #%%
 import pandas as pd
 from pandas import datetime as dt
@@ -68,7 +69,7 @@ y_train = df_train.DEFAULT_FLAG
 #%%
 myseed = 888
 cv_folds = 5
-ttu = 14
+ttu = 8
 
 max_trees = 2000
 #%% objective function
@@ -110,7 +111,7 @@ def xgb_x_val_auc(param_list):
     cvresult = xgb.cv(xgb_param, xgtrain, nfold=cv_folds, num_boost_round= max_trees,
             metrics='auc', early_stopping_rounds=50, seed=myseed)
     cur_res = cvresult.tail(1).values[0][2]
-    with open('train_log/xgb_'+date+'.txt', 'a') as f:
+    with open('train_log/xgb_rog_'+date+'.txt', 'a') as f:
         print('-----------', file=f)
         print(list(param_list), file=f)
         print('ntrees: ',cvresult.shape[0], file=f)
@@ -138,8 +139,8 @@ list_of_types = ['int', 'int', 'float', 'float','float', 'float', 'float', 'floa
 
 lower_bounds = [1,1,0,.4,.4,1,.001,0,1]
 upper_bounds = [25,25,20,1,1,30,.5,100,10]
-pop_size = 50
-generations = 5
+pop_size = 75
+generations = 8
 
 #%% Genetic Search for Parameters
 
