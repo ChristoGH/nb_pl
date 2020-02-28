@@ -63,5 +63,7 @@ target/
 
 *.model
 
+*.pdf
+
 data/DNN_test_20190710\.zip
 *.txt
